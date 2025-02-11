@@ -52,6 +52,8 @@ const autoReplies = {
     "who are you": "🤖 I'm *GODS GRACE BOT*, your assistant in this group."
 };
 
+const botNumber = "2348051891310@s.whatsapp.net"; // Your bot's number
+
 async function startBot() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState("auth_info");
@@ -90,13 +92,20 @@ function handleQRCode(qr) {
 async function handleIncomingMessages(sock, m) {
     try {
         const message = m.messages[0];
-        if (!message.message || message.key.fromMe) return;
+        if (!message.message) return;
 
         const msgText = message.message.conversation || message.message.extendedTextMessage?.text || '';
         const chatId = message.key.remoteJid;
         const sender = message.key.participant || message.key.remoteJid;
 
         console.log(`📩 Message received from ${sender}: ${msgText}`);
+
+        const isGroup = chatId.endsWith('@g.us');
+
+        // In private chat, only respond if the message is ".bot" or if the sender is the bot itself
+        if (!isGroup && msgText.trim() !== '.bot' && sender !== botNumber) {
+            return;
+        }
 
         if (!msgText.startsWith(prefix)) {
             await handleAutoReplies(sock, chatId, msgText, sender);
@@ -108,9 +117,6 @@ async function handleIncomingMessages(sock, m) {
         const args = msgText.trim().split(/ +/);
         const command = args.shift().slice(prefix.length).toLowerCase();
         console.log(`🔹 Command detected: ${command}`);
-
-        // Determine if this is a group chat.
-        const isGroup = chatId.endsWith('@g.us');
 
         // For group chats, check if the sender is an admin.
         let isAdmin = false;
@@ -134,7 +140,7 @@ async function handleIncomingMessages(sock, m) {
                 await sock.sendMessage(chatId, { text: formatMessage('This command is available only in group chats.') });
                 return;
             }
-            if (!isAdmin) {
+            if (!isAdmin && sender !== botNumber) {
                 await sock.sendMessage(chatId, { text: formatMessage('❌ You are not an admin to use this command.') });
                 return;
             }
@@ -172,9 +178,6 @@ async function handleIncomingMessages(sock, m) {
                 break;
             case 'clear':
                 await clearChat(sock, chatId);
-                break;
-            case 'poll':
-                await createPoll(sock, chatId, args);
                 break;
 
             // Admin Commands (group chat only)
@@ -339,71 +342,8 @@ async function unpinMessage(sock, chatId) {
     await sock.sendMessage(chatId, { text: formatMessage('📌 Unpinned Message.') });
 }
 
-async function createPoll(sock, chatId, args) {
-    if (args.length < 3) {
-        return await sock.sendMessage(chatId, { text: "⚠️ Usage: .poll <question> <option1> <option2> ... <duration in minutes>" });
-    }
-
-    // Extract duration
-    const duration = parseInt(args.pop()) * 60000; // Convert minutes to milliseconds
-    if (isNaN(duration) || duration < 60000) {
-        return await sock.sendMessage(chatId, { text: "⚠️ Invalid duration! Use a number (e.g., .poll Which club is better? Barcelona Real Madrid 60)" });
-    }
-
-    const pollQuestion = args.shift();
-    const pollOptions = args;
-    const pollId = Date.now().toString();
-    polls[pollId] = {
-        question: pollQuestion,
-        options: pollOptions.reduce((acc, option) => ({ ...acc, [option]: 0 }), {}),
-        votes: {}
-    };
-
-    // Get all group members
-    const groupInfo = await sock.groupMetadata(chatId);
-    const members = groupInfo.participants.map(m => m.id);
-
-    // Send poll to each member's DM
-    for (const member of members) {
-        await sock.sendMessage(member, {
-            text: `📊 *New Poll:* ${pollQuestion}\n\nReply with one of the following options to vote:\n${pollOptions.join('\n')}`
-        });
-    }
-
-    await sock.sendMessage(chatId, { text: "📢 Poll started! Check your DM to vote." });
-
-    // Set timeout to post results
-    setTimeout(() => postPollResults(sock, chatId, pollId), duration);
-}
-
-async function votePoll(sock, sender, message) {
-    for (const pollId in polls) {
-        const poll = polls[pollId];
-
-        if (!poll.votes[sender] && poll.options[message]) {
-            poll.options[message]++;
-            poll.votes[sender] = message;
-            await sock.sendMessage(sender, { text: `✅ Your vote for *${message}* has been recorded.` });
-            return;
-        }
-    }
-}
-
-async function postPollResults(sock, chatId, pollId) {
-    const poll = polls[pollId];
-    if (!poll) return;
-
-    let results = `📊 *Poll Results:*\n\n${poll.question}\n\n`;
-    for (const [option, count] of Object.entries(poll.options)) {
-        results += `${option}: ${count} votes\n`;
-    }
-
-    await sock.sendMessage(chatId, { text: `📢 *Poll Ended!*\n\n${results}` });
-    delete polls[pollId];
-}
-
 async function sendHelpMenu(sock, chatId, isGroup, isAdmin) {
-    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n- .poll <question> <duration in minutes>: Create a poll\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules`;
+    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules`;
     await sock.sendMessage(chatId, { text: formatMessage(helpMessage) });
 }
 
@@ -443,7 +383,6 @@ async function handleAntiLink(sock, message, msgText, chatId, participant) {
     if (linkRegex.test(msgText) || whatsappChannelRegex.test(msgText)) {
         try {
             const groupMetadata = await sock.groupMetadata(chatId);
-            const botNumber = "2348026977793@s.whatsapp.net"; // Your bot's number
             const isBotAdmin = groupMetadata.participants.some(p => p.id === botNumber && p.admin);
 
             if (!isBotAdmin) {
@@ -456,9 +395,9 @@ async function handleAntiLink(sock, message, msgText, chatId, participant) {
             });
 
             warnings[participant] = (warnings[participant] || 0) + 1;
-            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[participant]}/2: No links allowed!`) });
+            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[participant]}/3: No links allowed!`) });
 
-            if (warnings[participant] >= 2) {
+            if (warnings[participant] >= 3) {
                 await sock.groupParticipantsUpdate(chatId, [participant], 'remove');
             }
         } catch (err) {
@@ -499,14 +438,12 @@ async function handleAntiSales(sock, message, msgText, chatId, sender) {
 
 async function handleAutoReplies(sock, chatId, msgText, sender) {
     const lowerCaseMsg = msgText.toLowerCase();
-    const botNumber = "2348026977793"; // Your bot's number
-    const taggedGedion = msgText.includes("@gedion");
     const taggedBot = msgText.includes(`@${botNumber.split('@')[0]}`);
 
     const isGroup = chatId.endsWith('@g.us');
 
     if (isGroup) {
-        if (taggedGedion || taggedBot) {
+        if (taggedBot) {
             for (const [key, reply] of Object.entries(autoReplies)) {
                 if (lowerCaseMsg.includes(key)) {
                     await sock.sendMessage(chatId, { text: formatMessage(reply) });
