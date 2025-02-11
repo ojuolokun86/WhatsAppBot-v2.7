@@ -54,6 +54,39 @@ const autoReplies = {
 
 const botNumber = "2348051891310@s.whatsapp.net"; // Your bot's number
 
+const styles = {
+    default: (message) => `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋅☆⋅ ━╯`,
+    fancy: (message) => `╔══════════════════╗\n║ 🚀 **𝓣𝓔𝓒𝓗𝓘𝓣𝓞𝓞𝓝 𝓑𝓞𝓣** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **𝓣𝓮𝓬𝓱𝓲𝓽𝓸𝓸𝓷 𝓐𝓘**\n╰━ ⋅☆⋅ ━╯`,
+    stylish: (message) => `╔══════════════════╗\n║ 🚀 **𝕋𝔼ℂℍ𝕀𝕋𝕆𝕆ℕ 𝔹𝕆𝕋** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **𝕋𝕖𝕔𝕙𝕚𝕥𝕠𝕠𝕟 𝔸𝕀**\n╰━ ⋅☆⋅ ━╯`,
+    big: (message) => `╔══════════════════╗\n║ 🚀 **ＴＥＣＨＩＴＯＯＮ ＢＯＴ** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Ｔｅｃｈｉｔｏｏｎ ＡＩ**\n╰━ ⋅☆⋅ ━╯`
+};
+
+let currentStyle = styles.default;
+
+function formatMessage(message) {
+    return currentStyle(message);
+}
+
+async function setStyle(sock, chatId, args) {
+    const styleName = args[0];
+    if (styles[styleName]) {
+        currentStyle = styles[styleName];
+        await sock.sendMessage(chatId, { text: formatMessage(`✅ Style changed to ${styleName}.`) });
+    } else {
+        await sock.sendMessage(chatId, { text: formatMessage(`❌ Invalid style name. Available styles: ${Object.keys(styles).join(', ')}`) });
+    }
+}
+
+async function listStyles(sock, chatId) {
+    const styleList = `📋 *Available Styles:*\n\n${Object.keys(styles).map(style => `- ${style}`).join('\n')}`;
+    await sock.sendMessage(chatId, { text: formatMessage(styleList) });
+}
+
+async function resetStyle(sock, chatId) {
+    currentStyle = styles.default;
+    await sock.sendMessage(chatId, { text: formatMessage('✅ Style reset to default.') });
+}
+
 async function startBot() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState("auth_info");
@@ -244,6 +277,15 @@ async function handleIncomingMessages(sock, m) {
             case 'settournamentrules':
                 await setTournamentRules(sock, chatId, args.join(' '));
                 break;
+            case 'setstyle':
+                await setStyle(sock, chatId, args);
+                break;
+            case 'stylelist':
+                await listStyles(sock, chatId);
+                break;
+            case 'styledefault':
+                await resetStyle(sock, chatId);
+                break;
             default:
                 await sock.sendMessage(chatId, { text: formatMessage('❌ Unknown command! Use .menu for commands list.') });
         }
@@ -255,7 +297,6 @@ async function handleIncomingMessages(sock, m) {
     }
 }
 
-// New command functions (skeletons)
 async function translateText(sock, chatId, args) {
     // Implement translation logic here
 }
@@ -343,7 +384,7 @@ async function unpinMessage(sock, chatId) {
 }
 
 async function sendHelpMenu(sock, chatId, isGroup, isAdmin) {
-    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules`;
+    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules\n- .setstyle <style>: Set message style\n- .stylelist: List available styles\n- .styledefault: Reset to default style`;
     await sock.sendMessage(chatId, { text: formatMessage(helpMessage) });
 }
 
@@ -362,8 +403,6 @@ async function sendWeather(sock, chatId, args) {
     const weatherInfo = `🌤️ The weather in ${city} is sunny with a high of 25°C and a low of 15°C.`;
     await sock.sendMessage(chatId, { text: formatMessage(weatherInfo) });
 }
-
-// Existing functions...
 
 async function handleLockChatCommand(sock, chatId, isAdmin) {
     if (!isAdmin) return sock.sendMessage(chatId, { text: formatMessage("⚠️ This command is for admins only!") });
@@ -395,7 +434,7 @@ async function handleAntiLink(sock, message, msgText, chatId, participant) {
             });
 
             warnings[participant] = (warnings[participant] || 0) + 1;
-            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[participant]}/3: No links allowed!`) });
+            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ 𝓦𝓪𝓻𝓷𝓲𝓷𝓰 ${warnings[participant]}/3: 𝓝𝓸 𝓵𝓲𝓷𝓴𝓼 𝓪𝓵𝓵𝓸𝔀𝓮𝓭!`) });
 
             if (warnings[participant] >= 3) {
                 await sock.groupParticipantsUpdate(chatId, [participant], 'remove');
@@ -413,7 +452,7 @@ async function handleAntiSales(sock, message, msgText, chatId, sender) {
     if (isSalesMessage) {
         await sock.sendMessage(chatId, { delete: message.key });
         warnings[sender] = (warnings[sender] || 0) + 1;
-        await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed!`) });
+        await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed! (Admins only)`), mentions: [sender] });
 
         if (warnings[sender] >= 2) {
             await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
@@ -427,7 +466,7 @@ async function handleAntiSales(sock, message, msgText, chatId, sender) {
         if (isSalesMedia) {
             await sock.sendMessage(chatId, { delete: message.key });
             warnings[sender] = (warnings[sender] || 0) + 1;
-            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed!`) });
+            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed! (Admins only)`), mentions: [sender] });
 
             if (warnings[sender] >= 2) {
                 await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
@@ -480,7 +519,7 @@ async function tagAll(sock, chatId, message, sender) {
         const groupName = groupMetadata.subject;
         const senderName = sender.split('@')[0];
 
-        let tagMessage = `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n📌 **Group:** 『 ${groupName} 』\n👤 **User:** 『 @${senderName} 』\n📝 **Message:** 『 ${message} 』\n\n╭━ ⋆⋅☆⋅⋆ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋆⋅☆⋅⋆ ━╯\n\n`;
+        let tagMessage = `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n📌 **Group:** 『 ${groupName} 』\n👤 **User:** 『 @${senderName} 』\n📝 **Message:** 『 ${message} 』\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋅☆⋅ ━╯\n\n`;
 
         for (const member of members) {
             tagMessage += `🎊 @${member.split('@')[0]}\n`;
@@ -490,10 +529,6 @@ async function tagAll(sock, chatId, message, sender) {
     } catch (e) {
         console.error('Error in tagAll:', e);
     }
-}
-
-function formatMessage(message) {
-    return `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋆⋅☆⋅⋆ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋆⋅☆⋅⋆ ━╯`;
 }
 
 function resetWarnings() {
