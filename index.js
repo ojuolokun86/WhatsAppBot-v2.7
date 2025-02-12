@@ -56,7 +56,7 @@ const botNumber = "2348051891310@s.whatsapp.net"; // Your bot's number
 
 const styles = {
     default: (message) => `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋅☆⋅ ━╯`,
-    fancy: (message) => `╔══════════════════╗\n║ 🚀 **𝓣𝓔𝓒𝓗𝓘𝓣𝓞𝓞𝓝 𝓑𝓞𝓣** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **𝓣𝓮𝓬𝓱𝓲𝓽𝓸𝓸𝓷 𝓐𝓘**\n╰━ ⋅☆⋅ ━╯`,
+    fancy: (message) => `╔══════════════════╗\n║ 🚀 **𝓣𝓔𝓒𝓗𝕀𝕋𝕆𝕆ℕ 𝔹𝕆𝕋** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **𝓣𝓮𝓬𝓱𝓲𝓽𝓸𝓸𝓷 𝓐𝓘**\n╰━ ⋅☆⋅ ━╯`,
     stylish: (message) => `╔══════════════════╗\n║ 🚀 **𝕋𝔼ℂℍ𝕀𝕋𝕆𝕆ℕ 𝔹𝕆𝕋** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **𝕋𝕖𝕔𝕙𝕚𝕥𝕠𝕠𝕟 𝔸𝕀**\n╰━ ⋅☆⋅ ━╯`,
     big: (message) => `╔══════════════════╗\n║ 🚀 **ＴＥＣＨＩＴＯＯＮ ＢＯＴ** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Ｔｅｃｈｉｔｏｏｎ ＡＩ**\n╰━ ⋅☆⋅ ━╯`
 };
@@ -85,6 +85,134 @@ async function listStyles(sock, chatId) {
 async function resetStyle(sock, chatId) {
     currentStyle = styles.default;
     await sock.sendMessage(chatId, { text: formatMessage('✅ Style reset to default.') });
+}
+
+// Define a global object to store user statistics
+let userStats = {};
+
+// Function to update user statistics
+function updateUserStats(sender, command) {
+    if (!userStats[sender]) {
+        userStats[sender] = { messages: 0, commands: {} };
+    }
+    userStats[sender].messages += 1;
+    if (command) {
+        if (!userStats[sender].commands[command]) {
+            userStats[sender].commands[command] = 0;
+        }
+        userStats[sender].commands[command] += 1;
+    }
+}
+
+// Function to send user statistics
+async function sendUserStats(sock, chatId, args) {
+    const userId = args[0]?.replace('@', '') + "@s.whatsapp.net";
+    if (!userId || !userStats[userId]) {
+        await sock.sendMessage(chatId, { text: formatMessage('❌ No statistics available for this user.') });
+        return;
+    }
+
+    const stats = userStats[userId];
+    let statsMessage = `📊 *User Statistics for @${userId.split('@')[0]}:*\n\n`;
+    statsMessage += `📩 *Messages Sent:* ${stats.messages}\n`;
+    statsMessage += `🔹 *Commands Used:*\n`;
+    for (const [command, count] of Object.entries(stats.commands)) {
+        statsMessage += `- ${command}: ${count}\n`;
+    }
+
+    await sock.sendMessage(chatId, { text: formatMessage(statsMessage), mentions: [userId] });
+}
+
+// Define a global object to store scheduled messages
+let scheduledMessages = {};
+
+// Function to schedule a message
+async function scheduleMessage(sock, chatId, args) {
+    if (args.length < 2) {
+        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .schedule <time> <message>') });
+        return;
+    }
+
+    const time = args.shift();
+    const message = args.join(' ');
+
+    // Parse the time (format: HH:MM)
+    const [hours, minutes] = time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        await sock.sendMessage(chatId, { text: formatMessage('❌ Invalid time format. Use HH:MM (24-hour format).') });
+        return;
+    }
+
+    const now = new Date();
+    const scheduledTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+
+    // If the scheduled time is in the past, schedule it for the next day
+    if (scheduledTime < now) {
+        scheduledTime.setDate(scheduledTime.getDate() + 1);
+    }
+
+    const delay = scheduledTime - now;
+
+    // Schedule the message
+    const timeoutId = setTimeout(async () => {
+        await sock.sendMessage(chatId, { text: formatMessage(message) });
+        delete scheduledMessages[timeoutId];
+    }, delay);
+
+    // Store the scheduled message
+    scheduledMessages[timeoutId] = { chatId, message, scheduledTime };
+
+    await sock.sendMessage(chatId, { text: formatMessage(`✅ Message scheduled for ${scheduledTime.toLocaleTimeString()}.`) });
+}
+
+// Function to list scheduled messages
+async function listScheduledMessages(sock, chatId) {
+    if (Object.keys(scheduledMessages).length === 0) {
+        await sock.sendMessage(chatId, { text: formatMessage('📋 No scheduled messages.') });
+        return;
+    }
+
+    let messageList = '📋 *Scheduled Messages:*\n\n';
+    for (const [id, { message, scheduledTime }] of Object.entries(scheduledMessages)) {
+        messageList += `- ${message} (at ${scheduledTime.toLocaleString()})\n`;
+    }
+
+    await sock.sendMessage(chatId, { text: formatMessage(messageList) });
+}
+
+async function startAnnouncement(sock, chatId, message) {
+    try {
+        if (announcementInterval) {
+            clearInterval(announcementInterval);
+        }
+
+        announcementMessage = message;
+        announcementInterval = setInterval(async () => {
+            try {
+                await sock.sendMessage(chatId, { text: formatMessage(announcementMessage) });
+            } catch (error) {
+                console.error('Error sending announcement:', error);
+            }
+        }, 3600000); // Announce every hour
+
+        await sock.sendMessage(chatId, { text: formatMessage('✅ Announcements started.') });
+    } catch (error) {
+        console.error('Error starting announcement:', error);
+    }
+}
+
+async function stopAnnouncement(sock, chatId) {
+    try {
+        if (announcementInterval) {
+            clearInterval(announcementInterval);
+            announcementInterval = null;
+            await sock.sendMessage(chatId, { text: formatMessage('✅ Announcements stopped.') });
+        } else {
+            await sock.sendMessage(chatId, { text: formatMessage('❌ No active announcements to stop.') });
+        }
+    } catch (error) {
+        console.error('Error stopping announcement:', error);
+    }
 }
 
 async function startBot() {
@@ -133,7 +261,7 @@ async function handleIncomingMessages(sock, m) {
 
         console.log(`📩 Message received from ${sender}: ${msgText}`);
 
-        const isGroup = chatId.endsWith('@g.us');
+        const isGroup = chatId.endsWith('@g.us') || chatId.endsWith('@broadcast');
 
         // In private chat, only respond if the message is ".bot" or if the sender is the bot itself
         if (!isGroup && msgText.trim() !== '.bot' && sender !== botNumber) {
@@ -144,6 +272,7 @@ async function handleIncomingMessages(sock, m) {
             await handleAutoReplies(sock, chatId, msgText, sender);
             await handleAntiLink(sock, message, msgText, chatId, sender);
             await handleAntiSales(sock, message, msgText, chatId, sender);
+            updateUserStats(sender); // Update user statistics for messages
             return;
         }
 
@@ -153,11 +282,15 @@ async function handleIncomingMessages(sock, m) {
 
         // For group chats, check if the sender is an admin.
         let isAdmin = false;
+        let isBotAdmin = false;
         if (isGroup) {
             try {
                 const groupMetadata = await sock.groupMetadata(chatId);
                 isAdmin = groupMetadata.participants.some(p =>
                     p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin')
+                );
+                isBotAdmin = groupMetadata.participants.some(p =>
+                    p.id === botNumber && (p.admin === 'admin' || p.admin === 'superadmin')
                 );
             } catch (e) {
                 console.error("Error fetching group metadata:", e);
@@ -165,7 +298,7 @@ async function handleIncomingMessages(sock, m) {
         }
 
         // Define the set of admin-only commands.
-        const adminCommands = new Set(['ban', 'tagall', 'mute', 'unmute', 'announce', 'stopannounce', 'lockchat', 'unlockchat', 'schedule', 'addreply', 'removereply', 'listreplies', 'stats', 'setlanguage', 'pin', 'unpin', 'clear', 'setgrouprules', 'settournamentrules']);
+        const adminCommands = new Set(['ban', 'tagall', 'mute', 'unmute', 'announce', 'stopannounce', 'schedule', 'addreply', 'removereply', 'listreplies', 'stats', 'setlanguage', 'pin', 'unpin', 'clear', 'setgrouprules', 'settournamentrules']);
 
         // If an admin command is used in a non-group chat or by a non-admin, block it.
         if (adminCommands.has(command)) {
@@ -175,6 +308,10 @@ async function handleIncomingMessages(sock, m) {
             }
             if (!isAdmin && sender !== botNumber) {
                 await sock.sendMessage(chatId, { text: formatMessage('❌ You are not an admin to use this command.') });
+                return;
+            }
+            if (!isBotAdmin) {
+                await sock.sendMessage(chatId, { text: formatMessage('❌ Bot is not an admin in this group.') });
                 return;
             }
         }
@@ -228,12 +365,10 @@ async function handleIncomingMessages(sock, m) {
                 await tagAll(sock, chatId, args.join(' '), sender);
                 break;
             case 'mute':
-                // Placeholder for mute command logic
-                await sock.sendMessage(chatId, { text: formatMessage('🔇 Mute command executed (placeholder).') });
+                await handleLockChatCommand(sock, chatId, isAdmin);
                 break;
             case 'unmute':
-                // Placeholder for unmute command logic
-                await sock.sendMessage(chatId, { text: formatMessage('🔊 Unmute command executed (placeholder).') });
+                await handleUnlockChatCommand(sock, chatId, isAdmin);
                 break;
             case 'announce':
                 await startAnnouncement(sock, chatId, args.join(' '));
@@ -241,14 +376,11 @@ async function handleIncomingMessages(sock, m) {
             case 'stopannounce':
                 await stopAnnouncement(sock, chatId);
                 break;
-            case 'lockchat':
-                await handleLockChatCommand(sock, chatId, isAdmin);
-                break;
-            case 'unlockchat':
-                await handleUnlockChatCommand(sock, chatId, isAdmin);
-                break;
             case 'schedule':
                 await scheduleMessage(sock, chatId, args);
+                break;
+            case 'listscheduled':
+                await listScheduledMessages(sock, chatId);
                 break;
             case 'addreply':
                 await addAutoReply(sock, chatId, args);
@@ -292,6 +424,7 @@ async function handleIncomingMessages(sock, m) {
 
         // Check for deals in messages and media files
         await handleAntiSales(sock, message, msgText, chatId, sender);
+        updateUserStats(sender, command); // Update user statistics for commands
     } catch (error) {
         console.error("❌ Error handling incoming message:", error);
     }
@@ -299,10 +432,6 @@ async function handleIncomingMessages(sock, m) {
 
 async function translateText(sock, chatId, args) {
     // Implement translation logic here
-}
-
-async function scheduleMessage(sock, chatId, args) {
-    // Implement message scheduling logic here
 }
 
 async function addAutoReply(sock, chatId, args) {
@@ -324,10 +453,6 @@ async function listAutoReplies(sock, chatId) {
         replyList += `- "${trigger}": "${response}"\n`;
     }
     await sock.sendMessage(chatId, { text: formatMessage(replyList) });
-}
-
-async function sendUserStats(sock, chatId, args) {
-    // Implement user stats logic here
 }
 
 async function setLanguage(sock, chatId, args) {
@@ -384,7 +509,7 @@ async function unpinMessage(sock, chatId) {
 }
 
 async function sendHelpMenu(sock, chatId, isGroup, isAdmin) {
-    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules\n- .setstyle <style>: Set message style\n- .stylelist: List available styles\n- .styledefault: Reset to default style`;
+    const helpMessage = `📋 *Help Menu:*\n\nGeneral Commands:\n- .ping: Check if the bot is active\n- .menu: Show this help menu\n- .joke: Get a random joke\n- .quote: Get a random quote\n- .weather <city>: Get weather info\n- .translate <text>: Translate text\n- .admin: List group admins\n- .info: Show group info\n- .rules: Show group rules\n- .clear: Clear chat\n\nAdmin Commands:\n- .ban @user: Ban a user\n- .tagall <message>: Tag all members\n- .mute: Mute the group\n- .unmute: Unmute the group\n- .announce <message>: Make an announcement\n- .stopannounce: Stop announcements\n- .lockchat: Lock the chat\n- .unlockchat: Unlock the chat\n- .schedule <message>: Schedule a message\n- .listscheduled: List scheduled messages\n- .addreply <trigger> <response>: Add an auto-reply\n- .removereply <trigger>: Remove an auto-reply\n- .listreplies: List all auto-replies\n- .stats: Show user stats\n- .setlanguage <language>: Set bot language\n- .pin <message>: Pin a message\n- .unpin: Unpin a message\n- .setgrouprules <rules>: Set group rules\n- .settournamentrules <rules>: Set tournament rules\n- .setstyle <style>: Set message style\n- .stylelist: List available styles\n- .styledefault: Reset to default style`;
     await sock.sendMessage(chatId, { text: formatMessage(helpMessage) });
 }
 
