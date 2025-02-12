@@ -28,7 +28,7 @@ const autoReplies = {
     "where are you from": "🌍 I live on the internet, but I’m here to help you!",
     "what can you do": "🤖 I can help with group management, messages, and more. Type .help for commands.",
     "who created you": "👨‍💻 I was created by a developer to assist in this group.",
-    "tell me a joke": "😂 Why don’t skeletons fight each other? Because they don’t have the guts! 😆",
+    "tell me a joke": " Why don’t skeletons fight each other? Because they don’t have the guts! 😆",
     "i love you": "❤️ Aww! Thank you! I love helping you too. 😊",
     "i miss you": "😢 Don’t worry, I’m always here!",
     "are you single": "🤣 Haha! I’m just a bot, I don’t date.",
@@ -52,7 +52,7 @@ const autoReplies = {
     "who are you": "🤖 I'm *GODS GRACE BOT*, your assistant in this group."
 };
 
-const botNumber = "2348026977793@s.whatsapp.net"; // Your bot's number
+const botNumber = "2348051891310@s.whatsapp.net"; // Your bot's number
 
 const styles = {
     default: (message) => `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋅☆⋅ ━╯`,
@@ -419,25 +419,30 @@ async function handleUnlockChatCommand(sock, chatId, isAdmin) {
 async function handleAntiLink(sock, message, msgText, chatId, participant) {
     const linkRegex = /(https?:\/\/[^\s]+)/g;
     const whatsappChannelRegex = /https:\/\/whatsapp\.com\/channel\/[^\s]+/g;
+    const adminNumber = "your-admin-number@s.whatsapp.net"; // Replace with your WhatsApp number
+
     if (linkRegex.test(msgText) || whatsappChannelRegex.test(msgText)) {
         try {
             const groupMetadata = await sock.groupMetadata(chatId);
             const isBotAdmin = groupMetadata.participants.some(p => p.id === botNumber && p.admin);
+            const isAdmin = participant === adminNumber;
 
             if (!isBotAdmin) {
                 console.log("❌ Bot is not an admin, cannot delete messages.");
                 return;
             }
 
-            await sock.sendMessage(chatId, { 
-                delete: { remoteJid: chatId, fromMe: false, id: message.key.id, participant: message.key.participant } 
-            });
+            if (participant !== botNumber && !isAdmin) {
+                await sock.sendMessage(chatId, { 
+                    delete: { remoteJid: chatId, fromMe: false, id: message.key.id, participant: message.key.participant } 
+                });
 
-            warnings[participant] = (warnings[participant] || 0) + 1;
-            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ 𝓦𝓪𝓻𝓷𝓲𝓷𝓰 ${warnings[participant]}/3: 𝓝𝓸 𝓵𝓲𝓷𝓴𝓼 𝓪𝓵𝓵𝓸𝔀𝓮𝓭!`) });
+                warnings[participant] = (warnings[participant] || 0) + 1;
+                await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[participant]}/3: No links allowed!`) });
 
-            if (warnings[participant] >= 3) {
-                await sock.groupParticipantsUpdate(chatId, [participant], 'remove');
+                if (warnings[participant] >= 3) {
+                    await sock.groupParticipantsUpdate(chatId, [participant], 'remove');
+                }
             }
         } catch (err) {
             console.error("Error handling anti-link:", err);
@@ -447,9 +452,12 @@ async function handleAntiLink(sock, message, msgText, chatId, participant) {
 
 async function handleAntiSales(sock, message, msgText, chatId, sender) {
     const salesKeywords = ['sell', 'buy', 'trade', 'swap', 'exchange', 'price', 'for sale', 'available for purchase', 's3ll', 'b!uy'];
+    const adminNumber = "your-admin-number@s.whatsapp.net"; // Replace with your WhatsApp number
+    const isAdmin = sender === adminNumber;
+
     const isSalesMessage = salesKeywords.some(keyword => msgText.toLowerCase().includes(keyword));
 
-    if (isSalesMessage) {
+    if (isSalesMessage && sender !== botNumber && !isAdmin) {
         await sock.sendMessage(chatId, { delete: message.key });
         warnings[sender] = (warnings[sender] || 0) + 1;
         await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed! (Admins only)`), mentions: [sender] });
@@ -463,10 +471,10 @@ async function handleAntiSales(sock, message, msgText, chatId, sender) {
         const caption = message.message.imageMessage?.caption || message.message.videoMessage?.caption || '';
         const isSalesMedia = salesKeywords.some(keyword => caption.toLowerCase().includes(keyword));
 
-        if (isSalesMedia) {
+        if (isSalesMedia && sender !== botNumber && !isAdmin) {
             await sock.sendMessage(chatId, { delete: message.key });
             warnings[sender] = (warnings[sender] || 0) + 1;
-            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed! (Admins only)`), mentions: [sender] });
+            await sock.sendMessage(chatId, { text: formatMessage(`⚠️ Warning ${warnings[sender]}/2: No sales, trading, or swapping allowed! (Admins DEAL only)`), mentions: [sender] });
 
             if (warnings[sender] >= 2) {
                 await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
