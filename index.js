@@ -52,7 +52,7 @@ const autoReplies = {
     "who are you": "🤖 I'm *GODS GRACE BOT*, your assistant in this group."
 };
 
-const botNumber = "2348051891310@s.whatsapp.net"; // Your bot's number
+const botNumber = "2348026977793@s.whatsapp.net"; // Your bot's number
 
 const styles = {
     default: (message) => `╔══════════════════╗\n║ 🚀 **TECHITOON BOT** 🚀 ║\n╚══════════════════╝\n\n${message}\n\n╭━ ⋅☆⋅ ━╮\n  🤖 **Techitoon AI**\n╰━ ⋅☆⋅ ━╯`,
