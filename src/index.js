@@ -6,7 +6,7 @@ dotenv.config();
 const { formatMessage, setStyle, listStyles, resetStyle } = require('./utils/logger');
 const { handleIncomingMessages, handleGroupParticipantsUpdate } = require('./services/messageService');
 
-const prefix = ".";
+const prefix = process.env.PREFIX;
 let warnings = {};
 let manualWarnings = {};
 let polls = {};
@@ -16,7 +16,7 @@ let announcementInterval = null;
 let announcementMessage = '';
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const botNumber = "2348026977793@s.whatsapp.net"; // Your bot's number
+const botNumber = process.env.BOT_NUMBER; // Your bot's number
 
 function resetWarnings() {
     warnings = {};
@@ -51,10 +51,10 @@ function handleConnectionUpdate(sock, update) {
     if (connection === "open") {
         console.log("✅ Bot Connected to WhatsApp!");
     } else if (connection === "close") {
-        const shouldReconnect = (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut);
-        console.log("❌ Connection closed, restarting...", shouldReconnect);
+        console.log("❌ Connection closed, restarting...");
+        const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
         if (shouldReconnect) {
-            startBot();
+            setTimeout(() => startBot(), 5000);
         }
     }
 }

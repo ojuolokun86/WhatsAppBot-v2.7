@@ -1,5 +1,11 @@
 const { formatMessage } = require('../utils/logger');
 const { botNumber, adminNumber, prefix } = require('../config/config');
+const supabase = require('../supabaseClient');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const dotenv = require('dotenv');
+const { createClient } = require('@supabase/supabase-js');
+dotenv.config();
 
 let warnings = {};
 let manualWarnings = {};
@@ -90,330 +96,29 @@ function updateUserStats(sender, command) {
 }
 
 async function sendUserStats(sock, chatId, args) {
-    const userId = args[0]?.replace('@', '') + "@s.whatsapp.net";
-    if (!userId || !userStats[userId]) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ No statistics available for this user.') });
+    const userId = args[0];
+    if (!userStats[userId]) {
+        await sock.sendMessage(chatId, { text: formatMessage('No stats available for this user.') });
         return;
     }
 
     const stats = userStats[userId];
-    let statsMessage = `📊 *User Statistics for @${userId.split('@')[0]}:*\n\n`;
-    statsMessage += `📩 *Messages Sent:* ${stats.messages}\n`;
-    statsMessage += `🔹 *Commands Used:*\n`;
+    let statsMessage = `📊 *User Stats for ${userId}:*\n\n`;
+    statsMessage += `Messages: ${stats.messages}\n`;
+    statsMessage += `Commands:\n`;
     for (const [command, count] of Object.entries(stats.commands)) {
         statsMessage += `- ${command}: ${count}\n`;
     }
 
-    await sock.sendMessage(chatId, { text: formatMessage(statsMessage), mentions: [userId] });
+    await sock.sendMessage(chatId, { text: formatMessage(statsMessage) });
 }
 
-async function showAllGroupStats(sock, chatId) {
-    let statsMessage = `📊 *Group Member Statistics:*\n\n`;
-    for (const [userId, stats] of Object.entries(userStats)) {
-        statsMessage += `👤 @${userId.split('@')[0]}:\n`;
-        statsMessage += `📩 *Messages Sent:* ${stats.messages}\n`;
-        statsMessage += `🔹 *Commands Used:*\n`;
-        for (const [command, count] of Object.entries(stats.commands)) {
-            statsMessage += `  - ${command}: ${count}\n`;
-        }
-        statsMessage += '\n';
-    }
+async function clearChat(sock, chatId, sender, groupMetadata) {
+    const isAdmin = groupMetadata.participants.some(p => p.id === sender && p.admin);
+    if (!isAdmin) return await sock.sendMessage(chatId, { text: "❌ Only admins can clear the chat." });
 
-    await sock.sendMessage(chatId, { text: formatMessage(statsMessage), mentions: Object.keys(userStats) });
-}
-
-async function scheduleMessage(sock, chatId, args) {
-    if (args.length < 2) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .schedule <time> <message>') });
-        return;
-    }
-
-    const time = args.shift();
-    const message = args.join(' ');
-
-    // Parse the time (format: HH:MM)
-    const [hours, minutes] = time.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Invalid time format. Use HH:MM (24-hour format).') });
-        return;
-    }
-
-    const now = new Date();
-    const scheduledTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
-
-    // If the scheduled time is in the past, schedule it for the next day
-    if (scheduledTime < now) {
-        scheduledTime.setDate(scheduledTime.getDate() + 1);
-    }
-
-    const delay = scheduledTime - now;
-
-    // Schedule the message
-    const timeoutId = setTimeout(async () => {
-        await sock.sendMessage(chatId, { text: formatMessage(message) });
-        delete scheduledMessages[timeoutId];
-    }, delay);
-
-    // Store the scheduled message
-    scheduledMessages[timeoutId] = { chatId, message, scheduledTime };
-
-    await sock.sendMessage(chatId, { text: formatMessage(`✅ Message scheduled for ${scheduledTime.toLocaleTimeString()}.`) });
-}
-
-async function listScheduledMessages(sock, chatId) {
-    if (Object.keys(scheduledMessages).length === 0) {
-        await sock.sendMessage(chatId, { text: formatMessage('📋 No scheduled messages.') });
-        return;
-    }
-
-    let messageList = '📋 *Scheduled Messages:*\n\n';
-    for (const [id, { message, scheduledTime }] of Object.entries(scheduledMessages)) {
-        messageList += `- ${message} (at ${scheduledTime.toLocaleString()})\n`;
-    }
-
-    await sock.sendMessage(chatId, { text: formatMessage(messageList) });
-}
-
-async function startAnnouncement(sock, chatId, message) {
-    try {
-        if (announcementInterval) {
-            clearInterval(announcementInterval);
-        }
-
-        announcementMessage = message;
-        announcementInterval = setInterval(async () => {
-            try {
-                await sock.sendMessage(chatId, { text: formatMessage(announcementMessage) });
-            } catch (error) {
-                console.error("Error sending announcement:", error);
-            }
-        }, 3600000); // Every hour
-        await sock.sendMessage(chatId, { text: formatMessage('✅ Announcement started.') });
-    } catch (error) {
-        console.error("Error starting announcement:", error);
-    }
-}
-
-async function stopAnnouncement(sock, chatId) {
-    try {
-        if (announcementInterval) {
-            clearInterval(announcementInterval);
-            announcementInterval = null;
-            announcementMessage = '';
-            await sock.sendMessage(chatId, { text: formatMessage('✅ Announcement stopped.') });
-        } else {
-            await sock.sendMessage(chatId, { text: formatMessage('❌ No active announcement to stop.') });
-        }
-    } catch (error) {
-        console.error("Error stopping announcement:", error);
-    }
-}
-
-async function handleGroupParticipantsUpdate(sock, update) {
-    const { id, participants, action } = update;
-    if (action === 'add' && welcomeEnabled.has(id)) {
-        for (const participant of participants) {
-            await sock.sendMessage(id, {
-                text: formatMessage(`Welcome to the Efootball Dynasty family @${participant.split('@')[0]}, where legends are made! 🎉⚽ We’re beyond pumped to have you here! Brace yourself for non-stop fun, legendary tournaments, and fierce competition! 🏆💥 Let’s create unforgettable moments and take this Dynasty to the next level! 🔥👑`),
-                mentions: [participant]
-            });
-        }
-    }
-}
-
-async function tagAll(sock, chatId, message, sender) {
-    try {
-        const groupMetadata = await sock.groupMetadata(chatId);
-        const members = groupMetadata.participants.map(m => m.id);
-        const groupName = groupMetadata.subject;
-        const senderName = sender.split('@')[0];
-
-        let tagMessage = `📢 *${groupName} Announcement:*\n\n${message}\n\n`;
-        tagMessage += members.map(m => `@${m.split('@')[0]}`).join(' ');
-
-        await sock.sendMessage(chatId, { text: formatMessage(tagMessage), mentions: members });
-    } catch (error) {
-        console.error("Error tagging all members:", error);
-    }
-}
-
-async function pasteLink(sock, chatId, args) {
-    if (args.length < 1) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .pastelink <name>') });
-        return;
-    }
-
-    const name = args[0];
-
-    if (!savedLinks[name]) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ No link found with that name.') });
-        return;
-    }
-
-    await sock.sendMessage(chatId, { text: formatMessage(savedLinks[name]) });
-}
-
-async function saveLink(sock, chatId, args) {
-    if (args.length < 2) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .savelink <name> <url>') });
-        return;
-    }
-
-    const name = args[0];
-    const url = args[1];
-
-    savedLinks[name] = url;
-    await sock.sendMessage(chatId, { text: formatMessage(`✅ Link saved as ${name}.`) });
-}
-
-async function deleteLink(sock, chatId, args) {
-    if (args.length < 1) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .deletelink <name>') });
-        return;
-    }
-
-    const name = args[0];
-
-    if (!savedLinks[name]) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ No link found with that name.') });
-        return;
-    }
-
-    delete savedLinks[name];
-    await sock.sendMessage(chatId, { text: formatMessage(`✅ Link ${name} deleted.`) });
-}
-
-async function sendHelpMenu(sock, chatId, isGroup, isAdmin) {
-    let helpMessage = `📋 *Help Menu:*\n\n`;
-    helpMessage += `🔹 *General Commands:*\n`;
-    helpMessage += `- .ping: Check if the bot is active.\n`;
-    helpMessage += `- .menu: Show the help menu with a list of commands.\n`;
-    helpMessage += `- .joke: Get a random joke.\n`;
-    helpMessage += `- .quote: Get a random quote.\n`;
-    helpMessage += `- .weather <city>: Get weather information for a specified city.\n`;
-    helpMessage += `- .translate <text>: Translate text (implementation needed).\n`;
-    helpMessage += `- .admin: List group admins.\n`;
-    helpMessage += `- .info: Show group information.\n`;
-    helpMessage += `- .rules: Show group rules.\n`;
-    helpMessage += `- .clear: Clear chat (restricted to admins in groups and you in private chats).\n\n`;
-
-    if (isGroup && isAdmin) {
-        helpMessage += `🔹 *Admin Commands (Group Chat Only):*\n`;
-        helpMessage += `- .ban @user: Ban a user from the group.\n`;
-        helpMessage += `- .tagall <message>: Tag all members in the group with a message.\n`;
-        helpMessage += `- .mute: Mute the group (restrict chat to admins only).\n`;
-        helpMessage += `- .unmute: Unmute the group (allow all members to chat).\n`;
-        helpMessage += `- .announce <message>: Make an announcement.\n`;
-        helpMessage += `- .stopannounce: Stop announcements.\n`;
-        helpMessage += `- .schedule <time> <message>: Schedule a message to be sent at a specific time.\n`;
-        helpMessage += `- .listscheduled: List all scheduled messages.\n`;
-        helpMessage += `- .stats: Show user statistics.\n`;
-        helpMessage += `- .setstyle <style>: Set message style.\n`;
-        helpMessage += `- .stylelist: List available styles.\n`;
-        helpMessage += `- .styledefault: Reset to default style.\n`;
-        helpMessage += `- .showstats: Show all group member stats.\n`;
-        helpMessage += `- .startwelcome: Start sending welcome messages (restricted to bot owner).\n`;
-        helpMessage += `- .stopwelcome: Stop sending welcome messages (restricted to bot owner).\n`;
-        helpMessage += `- .savelink <name> <url>: Save a link (restricted to bot owner).\n`;
-        helpMessage += `- .deletelink <name>: Delete a saved link (restricted to bot owner).\n`;
-        helpMessage += `- .pastelink <name>: Paste a saved link.\n`;
-        helpMessage += `- .promote @user: Promote a user to admin.\n`;
-        helpMessage += `- .demote @user: Demote an admin to user.\n`;
-    }
-
-    await sock.sendMessage(chatId, { text: formatMessage(helpMessage) });
-}
-
-async function sendJoke(sock, chatId) {
-    const jokes = [
-        "Why don't scientists trust atoms? Because they make up everything!",
-        "Why did the scarecrow win an award? Because he was outstanding in his field!",
-        "Why don't skeletons fight each other? They don't have the guts."
-    ];
-    const joke = jokes[Math.floor(Math.random() * jokes.length)];
-    await sock.sendMessage(chatId, { text: formatMessage(joke) });
-}
-
-async function sendQuote(sock, chatId) {
-    const quotes = [
-        "The best way to predict the future is to invent it. - Alan Kay",
-        "Life is 10% what happens to us and 90% how we react to it. - Charles R. Swindoll",
-        "The only way to do great work is to love what you do. - Steve Jobs"
-    ];
-    const quote = quotes[Math.floor(Math.random() * quotes.length)];
-    await sock.sendMessage(chatId, { text: formatMessage(quote) });
-}
-
-async function sendWeather(sock, chatId, args) {
-    if (args.length < 1) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .weather <city>') });
-        return;
-    }
-
-    const city = args.join(' ');
-    // Implement weather API call here
-    const weatherInfo = `Weather information for ${city} (implementation needed).`;
-    await sock.sendMessage(chatId, { text: formatMessage(weatherInfo) });
-}
-
-async function translateText(sock, chatId, args) {
-    if (args.length < 1) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Usage: .translate <text>') });
-        return;
-    }
-
-    const text = args.join(' ');
-    // Implement translation API call here
-    const translatedText = `Translated text (implementation needed): ${text}`;
-    await sock.sendMessage(chatId, { text: formatMessage(translatedText) });
-}
-
-async function listAdmins(sock, chatId) {
-    const groupMetadata = await sock.groupMetadata(chatId);
-    const admins = groupMetadata.participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
-    const adminList = admins.map(a => `@${a.id.split('@')[0]}`).join('\n');
-    await sock.sendMessage(chatId, { text: formatMessage(`👥 *Group Admins:*\n\n${adminList}`), mentions: admins.map(a => a.id) });
-}
-
-async function sendGroupInfo(sock, chatId) {
-    const groupMetadata = await sock.groupMetadata(chatId);
-    const groupInfo = `📋 *Group Information:*\n\n`;
-    groupInfo += `- *Group Name:* ${groupMetadata.subject}\n`;
-    groupInfo += `- *Group Description:* ${groupMetadata.desc}\n`;
-    groupInfo += `- *Group Created At:* ${new Date(groupMetadata.creation * 1000).toLocaleString()}\n`;
-    groupInfo += `- *Group Owner:* @${groupMetadata.owner.split('@')[0]}\n`;
-    groupInfo += `- *Total Members:* ${groupMetadata.participants.length}\n`;
-
-    await sock.sendMessage(chatId, { text: formatMessage(groupInfo), mentions: [groupMetadata.owner] });
-}
-
-async function sendGroupRules(sock, chatId) {
-    const rules = "1. Be respectful.\n2. No spamming.\n3. Follow the group topic.";
-    await sock.sendMessage(chatId, { text: formatMessage(`📋 *Group Rules:*\n\n${rules}`) });
-}
-
-async function clearChat(sock, chatId, isAdmin) {
-    if (!isAdmin) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ You are not an admin to use this command.') });
-        return;
-    }
-
-    const groupMetadata = await sock.groupMetadata(chatId);
-    const isBotAdmin = groupMetadata.participants.some(p => p.id === botNumber && p.admin);
-
-    if (!isBotAdmin) {
-        await sock.sendMessage(chatId, { text: formatMessage('❌ Bot is not an admin in this group.') });
-        return;
-    }
-
-    const messages = await sock.loadMessages(chatId, 100);
-    const messageKeys = messages.messages.map(m => m.key);
-
-    for (const key of messageKeys) {
-        await sock.sendMessage(chatId, { delete: key });
-    }
-
-    await sock.sendMessage(chatId, { text: formatMessage('✅ Chat cleared.') });
+    await sock.sendMessage(chatId, { text: "🗑️ Clearing chat..." });
+    await sock.sendMessage(chatId, { delete: { remoteJid: chatId, fromMe: true } });
 }
 
 async function startWelcomeMessages(sock, chatId) {

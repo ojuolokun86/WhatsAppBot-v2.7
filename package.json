@@ -2,9 +2,9 @@
   "name": "whatsappbot-v2.7",
   "version": "2.7.0",
   "description": "A WhatsApp bot using Baileys",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node src/index.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^1.0.0",
